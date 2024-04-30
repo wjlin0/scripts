@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+
+if [[ "$(uname -s)" == "Darwin"* ]]; then
+    platform="macOS"
+elif [[ "$(uname -s)" == "Linux"* ]]; then
+    platform="linux"
+else
+    echo "Unsupported operating system"
+    exit 1
+fi
+# Check system architecture
+if [[ "$(uname -m)" == "x86_64" ]]; then
+    arch="amd64"
+elif [[ "$(uname -m)" == "arm64" ]]; then
+    arch="arm64"
+else
+    echo "Unsupported architecture"
+    exit 1
+fi
+
+
+
+
+function install() {
+    if command -v $1 &> /dev/null; then
+        return
+    fi
+    echo "Downloading $1..."
+
+    # 如果 $1 == nuclei
+    if [ "$1" == "nuclei" ]; then
+      release_info=$(curl -s https://api.github.com/repos/projectdiscovery/$1/releases/latest)
+    elif [ "$1" == "pathScan" ]; then
+      release_info=$(curl -s https://api.github.com/repos/wjlin0/$1/releases/latest)
+    else
+      return
+    fi
+
+    download_url=$(echo "$release_info" | grep "browser_download_url" | grep "$platform" | grep "$arch" | cut -d '"' -f 4)
+
+    curl -sL "$download_url" -o /tmp/$1.zip && unzip -p  /tmp/$1.zip $1 > /usr/local/bin/$1 && chmod +x /usr/local/bin/$1 && rm -rf /tmp/$1.zip
+    echo "$1 installed"
+}
+
+# install nuclei && pathScan
+install nuclei && install pathScan
+
+# update nuclei templates && pathScan
+nuclei -update && nuclei -ut && pathScan -update
+
+
+# Check if the user has provided a domain
+
+
+if [ -z "$1" ]; then
+    echo "usage: $0 <domain>"
+    exit 1
+fi
+DOMAIN=$1
+
+mkdir -p output/"$DOMAIN"/
+
+
+pathScan -s -sq "$DOMAIN" -silent -o output/"$DOMAIN"/pathScan.txt | nohup nuclei 1>output/"$DOMAIN"/nohup.out 2>output/"$DOMAIN"/nohup.out &
+
+#生产一个命令
+
+cat <<EOF > cat-sh
+#!/bin/bash
+
+tail -f output/$DOMAIN/nohup.out
+EOF
+
+chmod +x cat-sh
