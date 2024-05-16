@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# 判断 acme.sh 是否存在
+if [ ! -f "$HOME/.acme.sh/acme.sh" ]; then
+    curl https://get.acme.sh | sh
+fi
+
+usage() {
+    echo "Usage: $0 --domain <domain_name> [--dns <dns_provider>]"
+    echo "Options:"
+    echo "  --domain <domain_name> : Specify the domain name for which SSL certificate is to be generated."
+    echo "  --dns <dns_provider>   : Specify the DNS provider. Default is 'dns_cf' (Cloudflare)."
+    exit 1
+}
+
+# Default DNS provider
+dns_provider="dns_cf"
+
+while [ $# -gt 0 ]; do
+    key="$1"
+    case $key in
+        --domain)
+        domain="$2"
+        shift
+        ;;
+        --dns)
+        dns_provider="$2"
+        shift
+        ;;
+        *)
+        usage
+        ;;
+    esac
+    shift
+done
+
+if [ -z "$domain" ]; then
+    echo "Error: Domain name not specified."
+    usage
+fi
+if [ -z "$dns_provider" ]; then
+    echo "Error: DNS_PROVIDER empty"
+fi
+
+echo "Generating SSL certificate for domain: $domain using DNS provider: $dns_provider"
+
+
+# set default ca
+ ~/.acme.sh/acme.sh  --set-default-ca --server letsencrypt
+
+
+# Run acme.sh with specified DNS provider
+~/.acme.sh/acme.sh --issue --dns "$dns_provider" -d "$domain" -d "*.$domain"  --dnssleep 300  --force
+# Install certificate
+mkdir -p "$HOME/ssl/"
+# Check if the secret exists
+
+if kubectl get secret tls-"$domain" >/dev/null 2>&1; then
+    echo "Secret tls-$domain already exists, deleting..."
+    kubectl delete secret tls-"$domain"
+fi
+
+reload_cmd="kubectl create secret tls tls-$domain --cert=/root/ssl/$domain.crt --key=/root/ssl/$domain.key";
+~/.acme.sh/acme.sh --install-cert -d "$domain" --key-file "/root/ssl/$domain.key" --cert-file "/root/ssl/$domain.crt" --reloadcmd "$reload_cmd"
