@@ -46,9 +46,9 @@ function install() {
 install nuclei && install pathScan
 
 # update nuclei templates && pathScan
-nuclei -update && nuclei -ut && pathScan -update
-
-
+cronjob="30 2 * * * /usr/local/bin/nuclei -update && /usr/local/bin/nuclei -ut && /usr/local/bin/pathScan -update"
+echo "$cronjob" > /tmp/tempcron
+crontab /tmp/tempcron
 # Check if the user has provided a domain
 
 
@@ -61,12 +61,13 @@ DOMAIN=$1
 mkdir -p output/"$DOMAIN"/
 
 
-pathScan -s -sq "$DOMAIN" -silent -o output/"$DOMAIN"/pathScan.txt | nohup nuclei 1>output/"$DOMAIN"/nohup.out 2>output/"$DOMAIN"/nohup.out &
+pathScan -s -sq "$DOMAIN" -silent -o output/"$DOMAIN"/pathScan.txt | nohup nuclei 1>output/"$DOMAIN"/nohup.out 2>&1 &
 
 #生产一个命令
 
 cat <<EOF > cat-sh
 #!/bin/bash
+
 echo output/$DOMAIN/nohup.out
 EOF
-
+chmod +x cat-sh
