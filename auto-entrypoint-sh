@@ -67,8 +67,6 @@ pathScan -s -sq "$DOMAIN" -silent -o output/"$DOMAIN"/pathScan.txt | nohup nucle
 
 cat <<EOF > cat-sh
 #!/bin/bash
-
-tail -f output/$DOMAIN/nohup.out
+echo output/$DOMAIN/nohup.out
 EOF
 
-chmod +x cat-sh
