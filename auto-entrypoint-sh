@@ -18,7 +18,21 @@ else
     exit 1
 fi
 
+function addCronJob() {
+  # update nuclei templates && pathScan
+  # 定义 cron 任务
+cronjob="30 2 * * * nuclei -update && nuclei -ut && pathScan -update"
 
+# 检查是否已经存在相同的 cron 任务
+if ! crontab -l | grep -q "$cronjob"; then
+    # 将 cron 任务添加到临时文件
+    echo "$cronjob" > /tmp/tempcron
+    # 将临时文件添加到 crontab
+    crontab /tmp/tempcron
+    # 删除临时文件
+    rm /tmp/tempcron
+fi
+}
 
 
 function install() {
@@ -45,10 +59,7 @@ function install() {
 # install nuclei && pathScan
 install nuclei && install pathScan
 
-# update nuclei templates && pathScan
-cronjob="30 2 * * * /usr/local/bin/nuclei -update && /usr/local/bin/nuclei -ut && /usr/local/bin/pathScan -update"
-echo "$cronjob" > /tmp/tempcron
-crontab /tmp/tempcron
+
 # Check if the user has provided a domain
 
 
@@ -58,10 +69,9 @@ if [ -z "$1" ]; then
 fi
 DOMAIN=$1
 
-mkdir -p output/"$DOMAIN"/
+mkdir -p output/"$DOMAIN"/nuclei
 
-
-pathScan -s -sq "$DOMAIN" -silent -o output/"$DOMAIN"/pathScan.txt | nohup nuclei 1>output/"$DOMAIN"/nohup.out 2>&1 &
+pathScan -s -sq "$DOMAIN" -sd -silent -o output/"$DOMAIN"/pathScan.txt | nohup nuclei -s critical,high,medium -me output/"$DOMAIN"/nuclei/markdown/ -store-resp -store-resp-dir output/"$DOMAIN"/nuclei/  &
 
 #生产一个命令
 
