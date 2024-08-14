@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
+
 # 判断 acme.sh 是否存在
 if [ ! -f "$HOME/.acme.sh/acme.sh" ]; then
+    echo "acme.sh not found, installing..."
     curl https://get.acme.sh | sh
 fi
 
@@ -12,9 +14,10 @@ usage() {
     exit 1
 }
 
-# Default DNS provider
+# 默认 DNS 提供商
 dns_provider="dns_cf"
 
+# 解析命令行参数
 while [ $# -gt 0 ]; do
     key="$1"
     case $key in
@@ -37,27 +40,26 @@ if [ -z "$domain" ]; then
     echo "Error: Domain name not specified."
     usage
 fi
-if [ -z "$dns_provider" ]; then
-    echo "Error: DNS_PROVIDER empty"
-fi
 
 echo "Generating SSL certificate for domain: $domain using DNS provider: $dns_provider"
 
+# 设置默认 CA
+~/.acme.sh/acme.sh --set-default-ca --server letsencrypt
 
-# set default ca
- ~/.acme.sh/acme.sh  --set-default-ca --server letsencrypt
+# 生成证书
+~/.acme.sh/acme.sh --issue --dns "$dns_provider" -d "$domain" -d "*.$domain" --dnssleep 300 --force
 
-
-# Run acme.sh with specified DNS provider
-~/.acme.sh/acme.sh --issue --dns "$dns_provider" -d "$domain" -d "*.$domain"  --dnssleep 300  --force
-# Install certificate
+# 安装证书
 mkdir -p "$HOME/ssl/"
-# Check if the secret exists
 
+# 删除已有 Secret
 if kubectl get secret tls-"$domain" >/dev/null 2>&1; then
     echo "Secret tls-$domain already exists, deleting..."
     kubectl delete secret tls-"$domain"
 fi
 
-reload_cmd="kubectl create secret tls tls-$domain --cert=/root/ssl/$domain.crt --key=/root/ssl/$domain.key && kubectl rollout restart deployment ingress-nginx-controller --namespace ingress-nginx";
-~/.acme.sh/acme.sh --install-cert -d "$domain" --key-file "/root/ssl/$domain.key" --cert-file "/root/ssl/$domain.crt" --reloadcmd "$reload_cmd"
+# 创建新的 Secret
+kubectl create secret tls tls-"$domain" --cert="$HOME/ssl/$domain.crt" --key="$HOME/ssl/$domain.key"
+
+# 安装证书并更新 Secret
+~/.acme.sh/acme.sh --install-cert -d "$domain" --key-file "$HOME/ssl/$domain.key" --cert-file "$HOME/ssl/$domain.crt" --reloadcmd "kubectl delete secret tls-$domain; kubectl create secret tls tls-$domain --cert=$HOME/ssl/$domain.crt --key=$HOME/ssl/$domain.key"
